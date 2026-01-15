@@ -212,26 +212,6 @@ function count_tokens(text, padding = 0) {
     let ctx = getContext();
     return ctx.getTokenCount(text, padding);
 }
-function get_cached_token_count(message) {
-    // Get the token count of the message summary, caching it if possible.
-    // We need to invalidate the cache if the 'show_prefill' setting changes, as that affects the summary text.
-    let memory = get_memory(message)
-    if (!memory) return 0
-
-    let show_prefill = get_settings('show_prefill')
-    let cached_count = get_data(message, 'token_count')
-    let cached_state = get_data(message, 'token_count_prefill_state')
-
-    if (cached_count !== undefined && cached_state === show_prefill) {
-        return cached_count
-    }
-
-    // calculate and cache
-    let count = count_tokens(memory)
-    set_data(message, 'token_count', count)
-    set_data(message, 'token_count_prefill_state', show_prefill)
-    return count
-}
 function get_context_size() {
     // Get the current context size
     return getMaxContextSize();
@@ -3414,9 +3394,10 @@ function update_message_inclusion_flags() {
     let long_limit_reached = false;
     let end = chat.length - 1;
 
-    let short_token_count = 0
-    let long_token_count = 0
-    let separator_token_count = count_tokens(get_settings('summary_injection_separator'))
+    let short_summary = ""  // total concatenated summary so far
+    let long_summary = ""  // temp summary storage to check token length
+    let new_short_summary = ""
+    let new_long_summary = ""
 
     for (let i = end; i >= 0; i--) {
         let message = chat[i];
@@ -3448,15 +3429,13 @@ function update_message_inclusion_flags() {
 
             // consider this for short term memories as long as we aren't separating long-term or (if we are), this isn't a long-term
             if (!separate_long_term || !get_data(message, 'remember')) {
-                let token_count = get_cached_token_count(message)
-                // Add separator tokens if this isn't the first item
-                let added_tokens = token_count + (short_token_count > 0 ? separator_token_count : 0)
-
-                if (short_token_count + added_tokens > get_short_token_limit()) {  // over context limit
+                new_short_summary = concatenate_summary(short_summary, message)  // concatenate this summary
+                let short_token_size = count_tokens(new_short_summary);
+                if (short_token_size > get_short_token_limit()) {  // over context limit
                     short_limit_reached = true;
                 } else {  // under context limit
                     set_data(message, 'include', 'short');
-                    short_token_count += added_tokens
+                    short_summary = new_short_summary
                     continue
                 }
             }
@@ -3465,15 +3444,13 @@ function update_message_inclusion_flags() {
         // if the short-term limit has been reached (or we are separating), check the long-term limit.
         let remember = get_data(message, 'remember');
         if (!long_limit_reached && remember) {  // long-term limit hasn't been reached yet and the message was marked to be remembered
-            let token_count = get_cached_token_count(message)
-            // Add separator tokens if this isn't the first item
-            let added_tokens = token_count + (long_token_count > 0 ? separator_token_count : 0)
-
-            if (long_token_count + added_tokens > get_long_token_limit()) {  // over context limit
+            new_long_summary = concatenate_summary(long_summary, message)  // concatenate this summary
+            let long_token_size = count_tokens(new_long_summary);
+            if (long_token_size > get_long_token_limit()) {  // over context limit
                 long_limit_reached = true;
             } else {
                 set_data(message, 'include', 'long');  // mark the message as long-term
-                long_token_count += added_tokens
+                long_summary = new_long_summary
                 continue
             }
         }
@@ -3571,12 +3548,8 @@ globalThis.memory_intercept_messages = function (chat, _contextSize, _abort, typ
         delete chat[i].extra.ignore_formatting
         let message = chat[i]
         let lagging = get_data(message, 'lagging')  // The message should be kept
-        let has_summary = !!get_memory(message) // Check if the message has a summary
         chat[i] = structuredClone(chat[i])  // keep changes temporary for this generation
-        // Only remove if it's NOT lagging (old) AND has a summary.
-        // If it's lagging (recent), keep it.
-        // If it's old but has no summary, keep it.
-        chat[i].extra[IGNORE_SYMBOL] = !lagging && has_summary
+        chat[i].extra[IGNORE_SYMBOL] = !lagging
     }
 };
 
