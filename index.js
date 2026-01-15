@@ -3396,8 +3396,11 @@ function update_message_inclusion_flags() {
 
     let short_summary = ""  // total concatenated summary so far
     let long_summary = ""  // temp summary storage to check token length
-    let new_short_summary = ""
-    let new_long_summary = ""
+
+    // Optimization: Track token counts to avoid O(N^2) re-tokenization
+    let short_token_count = 0
+    let long_token_count = 0
+    let separator = get_settings('summary_injection_separator')
 
     for (let i = end; i >= 0; i--) {
         let message = chat[i];
@@ -3420,22 +3423,32 @@ function update_message_inclusion_flags() {
             continue;
         }
 
-        if (!short_limit_reached) {  // short-term limit hasn't been reached yet
-            let memory = get_memory(message)
-            if (!memory) {  // If it doesn't have a memory, mark it as excluded and move to the next
-                set_data(message, 'include', null)
-                continue
+        let memory = get_memory(message)
+        if (!get_data(message, 'memory')) {
+            // Fallback: if no summary exists, use the full message content
+            // This ensures the message is not lost and stays in chronological order
+            let name = message.name
+            if (name) {
+                memory = `${name}: ${message.mes}`
+            } else {
+                memory = message.mes
             }
+        }
 
+        // Calculate tokens for this specific memory once
+        // We count (separator + memory) together to account for any token merging that might happen at the boundary
+        let added_tokens = count_tokens(separator + memory)
+
+        if (!short_limit_reached) {  // short-term limit hasn't been reached yet
             // consider this for short term memories as long as we aren't separating long-term or (if we are), this isn't a long-term
             if (!separate_long_term || !get_data(message, 'remember')) {
-                new_short_summary = concatenate_summary(short_summary, message)  // concatenate this summary
-                let short_token_size = count_tokens(new_short_summary);
-                if (short_token_size > get_short_token_limit()) {  // over context limit
+
+                if (short_token_count + added_tokens > get_short_token_limit()) {  // over context limit
                     short_limit_reached = true;
                 } else {  // under context limit
                     set_data(message, 'include', 'short');
-                    short_summary = new_short_summary
+                    short_summary = concatenate_summary(short_summary, message, separator)
+                    short_token_count += added_tokens
                     continue
                 }
             }
@@ -3444,13 +3457,13 @@ function update_message_inclusion_flags() {
         // if the short-term limit has been reached (or we are separating), check the long-term limit.
         let remember = get_data(message, 'remember');
         if (!long_limit_reached && remember) {  // long-term limit hasn't been reached yet and the message was marked to be remembered
-            new_long_summary = concatenate_summary(long_summary, message)  // concatenate this summary
-            let long_token_size = count_tokens(new_long_summary);
-            if (long_token_size > get_long_token_limit()) {  // over context limit
+
+            if (long_token_count + added_tokens > get_long_token_limit()) {  // over context limit
                 long_limit_reached = true;
             } else {
                 set_data(message, 'include', 'long');  // mark the message as long-term
-                long_summary = new_long_summary
+                long_summary = concatenate_summary(long_summary, message, separator)
+                long_token_count += added_tokens
                 continue
             }
         }
@@ -3464,8 +3477,14 @@ function update_message_inclusion_flags() {
 function concatenate_summary(existing_text, message, separator = null) {
     // given an existing text of concatenated summaries, concatenate the next one onto it
     let memory = get_memory(message)
-    if (!memory) {  // if there's no summary, do nothing
-        return existing_text
+    if (!get_data(message, 'memory')) {
+        // Fallback: if no summary exists, use the full message content
+        let name = message.name
+        if (name) {
+            memory = `${name}: ${message.mes}`
+        } else {
+            memory = message.mes
+        }
     }
     separator = separator ?? get_settings('summary_injection_separator')
     return existing_text + separator + memory
