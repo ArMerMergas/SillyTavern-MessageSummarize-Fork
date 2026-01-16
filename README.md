@@ -1,24 +1,10 @@
-# Message Summarize (ArMer's Fork)
+# Message Summarize (Fork)
 
 This is a modified version of the **Message Summarize** extension for SillyTavern.
 **Original extension by [qvink](https://github.com/qvink/SillyTavern-MessageSummarize).**
 
 Please refer to the original repository for full documentation on basic usage.
-
-## 🚀 Key Changes & New Features
-
-### 1. Aggressive Summarization Mode
-Added a new "Aggressive" mode to save even more context tokens for older messages.
-*   **Aggressive Depth Threshold**: Messages older than a configured number (e.g., 20 messages back) will automatically use a different, more concise prompt.
-*   **Separate Prompt Editor**: You can fully customize the "Aggressive Prompt", including its own role, prefill, and macros, independent of the standard summary prompt.
-*   **Upgrade Button**: A new "Upgrade to Aggressive" button allows you to bulk-resummarize existing memories using the aggressive prompt.
-# Message Summarize (ArMer's Fork)
-
-This is a modified version of the **Message Summarize** extension for SillyTavern.
-**Original extension by [qvink](https://github.com/qvink/SillyTavern-MessageSummarize).**
-
-Please refer to the original repository for full documentation on basic usage.
-- Install the extension in ST using the github link: https://github.com/ArMerMergas/SillyTavern-MessageSummarize-Fork
+- Install the extension in ST using the github link: https://github.com/ArMerMergas/SillyTavern-MessageSummarize-Fork.git
 
 ## 🚀 Key Changes & New Features
 
