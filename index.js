@@ -3514,7 +3514,7 @@ function collect_chat_messages(include) {
     // iterate in reverse order
     for (let i = context.chat.length - 1; i >= 0; i--) {
         let message = context.chat[i];
-        // if (!get_data(message, 'memory')) continue  // REMOVED: allow fallback to full message
+
         if (get_data(message, 'lagging')) continue  // lagging - not injected yet
         if (get_data(message, 'include') !== include) continue  // not the include types we want
         indexes.push(i)
